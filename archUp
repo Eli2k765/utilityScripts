@@ -8,6 +8,9 @@ fi
 [[ $(id -u) -eq 0 ]] || { echo >&2 "Must be root to run script"; exit 1; }
 
 #Update keyring and databases
+
+pacman -S archlinux-keyring
+
 pacman-key --init && pacman -Qs archlinux-keyring && pacman-key --populate archlinux ; pacman -Qs chaotic-keyring && pacman-key --populate chaotic ; pacman -Qs blackarch-keyring && pacman-key --populate blackarch ; pacman -Su
 
 reflector --latest 5 --age 2 --fastest 5 --protocol https --sort rate --save /etc/pacman.d/mirrorlist
