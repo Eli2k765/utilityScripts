@@ -1,0 +1,15 @@
+#!/bin/bash
+
+# If this script is run as a cron job, I recommend setting the path to the full path of the home directory to avoid any issues and mitigate any potential security risks.
+
+archiveName="recentlyModified.tar.gz"
+archivePath="$HOME/$archiveName"
+directory="$HOME"
+excludeDirectories="*.Trash* *.cache*"
+
+findCommand="find $directory -type f -mtime -21 -not -path $excludeDirectories"
+
+tarCommand="tar -czf $archivePath -T <($findCommand)"
+
+eval $tarCommand
+

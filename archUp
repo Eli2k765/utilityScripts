@@ -1,0 +1,53 @@
+#!/bin/bash
+#If db is locked, exit
+if [ -f /var/lib/pacman/db.lck ]; then
+    exit 1
+fi
+
+#Check if root
+[[ $(id -u) -eq 0 ]] || { echo >&2 "Must be root to run script"; exit 1; }
+
+#Update keyring and databases
+pacman-key --init && pacman -Qs archlinux-keyring && pacman-key --populate archlinux ; pacman -Qs chaotic-keyring && pacman-key --populate chaotic ; pacman -Qs blackarch-keyring && pacman-key --populate blackarch ; pacman -Su
+
+reflector --latest 5 --age 2 --fastest 5 --protocol https --sort rate --save /etc/pacman.d/mirrorlist
+
+pacman -Syu ; paccache -ruk 0 ; pacman -Rns $(pacman -Qtdq)
+
+if [ -x /usr/bin/locate ]; then
+    systemctl start updatedb.service --no-block
+fi
+
+if [ -f /usr/lib/systemd/user/garuda-fish-completions-update.service ] && [ ! -z "$SUDO_USER" ]; then
+    systemctl --user -M "$SUDO_USER@.host" start garuda-fish-completions-update.service --no-block 2>&1 | awk '/Transport endpoint is not connected$/ { exit 0; } 1'
+fi
+
+# Check if the user wants to continue
+echo "This script will now merge pacnew files into the original files."
+echo "This will overwrite the original files."
+echo "Do you want to continue? (y/n)"
+read -r answer
+if [ "$answer" != "y" ]; then
+    echo "Aborting..."
+    exit 1
+fi
+
+# Merge pacnew files
+echo "Merging pacnew files..."
+for file in /etc/*.pacnew; do
+    if [ -f "$file" ]; then
+        echo "Merging $file..."
+        cp -f "$file" "${file%.pacnew}"
+    fi
+done
+
+# Remove pacnew files
+# echo "Removing pacnew files..."
+
+rm -f /etc/*.pacnew
+echo "Done."
+
+#reboot if needed
+if [ -f /var/run/reboot-required ]; then
+    reboot
+fi

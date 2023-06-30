@@ -1,0 +1,205 @@
+#!/bin/bash
+#This script installs Blackarch and all of the tools I use on a regular basis.
+#I use Garuda KDE Lite VM although this should work on any Arch box.
+#Tool list is from pacman -Qet | awk "{print $1}" on October 8th 2022
+[[ $(id -u) -eq 0 ]] || { echo >&2 "Must be root to run script"; exit 1; }
+
+PS3="Please select either 1 or 2: "
+choices=("yes" "no")
+
+#install Blackarch
+if ! grep -q "\[blackarch\]" /etc/pacman.conf ; then
+	echo "It looks like you don't have the Blackarch repo. Would you like to install it?"
+	select choice1 in "${choices[@]}"; do
+		case $choice1 in
+			yes)
+				cd /home/$SUDO_USER/Downloads/
+				echo "Installing the Blackarch repo"
+				curl -O https://blackarch.org/strap.sh
+				echo 5ea40d49ecd14c2e024deecf90605426db97ea0c strap.sh | sha1sum -c
+				chmod +x strap.sh
+				./strap.sh
+				sleep 1
+				break
+				;;
+			no)
+				echo "Please install the repo manually or ensure [blackarch] is in /etc/pacman.conf."
+				echo "If the repo is not installed, the script will fail."
+				exit 1
+				;;
+
+		esac
+	done
+else
+	echo "It looks like you have blackarch installed, that'll make things faster."
+fi
+
+#install Chaotic-AUR
+if ! grep -q "\[chaotic-aur\]" /etc/pacman.conf ; then
+	echo "It looks like you don't have the Chaotic-AUR repo. Would you like to install it?"
+	select choice1 in "${choices[@]}"; do
+		case $choice1 in
+			yes)
+                pacman-key --recv-key FBA220DFC880C036 --keyserver keyserver.ubuntu.com
+                pacman-key --lsign-key FBA220DFC880C036
+                pacman -U 'https://cdn-mirror.chaotic.cx/chaotic-aur/chaotic-keyring.pkg.tar.zst' 'https://cdn-mirror.chaotic.cx/chaotic-aur/chaotic-mirrorlist.pkg.tar.zst'
+                cat >> "/etc/pacman.conf" << EOF
+[chaotic-aul]
+Include = /etc/pacman.d/chaotic-mirrorlist
+EOF
+				sleep 1
+				break
+				;;
+			no)
+				echo "Please install the repo manually or ensure [chaotic-aur] is in /etc/pacman.conf."
+				echo "If the repo is not installed, the script will fail."
+				exit 1
+				;;
+
+		esac
+	done
+else
+	echo "It looks like you have chaotic-aur installed, that'll make things faster."
+fi
+
+echo "Refreshing keyring"
+pacman-key --init && pacman -Qs archlinux-keyring && pacman-key --populate archlinux; pacman -Qs chaotic-keyring && pacman-key --populate chaotic ; pacman -Qs blackarch-keyring && pacman-key --populate blackarch
+
+echo "Updating before anything new is added."
+pacman -Syu
+
+pacman --needed --noconfirm -S reflector rsync git
+
+echo "Adding reflector to easily get fastest mirrorlist."
+if [ -f /etc/pacman.d/mirrorlist ]; then
+    if [ $(find /etc/pacman.d/mirrorlist -mtime -1) ]; then
+        echo "Mirrorlist is up to date"
+    else
+        reflector -f 30 -l 30 --number 10 --save /etc/pacman.d/mirrorlist
+    fi
+else
+    echo "Mirrorlist not found."
+fi
+
+
+echo "Installing tools"
+
+onoff=on
+cmd=(dialog --title 'SecTools for Garuda Arch' --output-fd 1 --separate-output --extra-button --extra-label 'Select All' --cancel-label 'Select None' --checklist 'Choose the tools to install:' 0 0 0)
+load-dialog () {
+    options=(
+                1 "Programming languages and compilers" $onoff
+                2 "Webapp and web3 tools" $onoff
+                3 "Wordlists" $onoff
+                4 "Network pentesting and osint tools" $onoff
+                5 "Network analysis and wireless tools" $onoff
+                6 "File analysis and fuzzing tools" $onoff
+                7 "Mobile and Vehicle tools" $onoff
+                8 "Password tools" $onoff
+                9 "Social Engineering tools" $onoff
+                10 "QoL tools" $onoff
+    )
+    choices=$("${cmd[@]}" "${options[@]}")
+}
+
+load-dialog
+exit_code="$?"
+while [[ $exit_code -ne 0 ]]; do
+case $exit_code in
+    1) clear; onoff=off; load-dialog;;
+    3) clear; onoff=on; load-dialog;;
+esac
+exit_code="$?"
+done
+clear
+for choice in $choices
+do
+    case $choice in
+            1)
+                pacman --needed --noconfirm -S nodejs-lts-gallium gcc gcc-libs clang llvm gnuplot powershell php python3 python2 python2-pip python python-pip python-beautifulsoup4 python-lxml python-html5lib python-scapy python-cryptography python-pyx python-pycryptodome python-opengl python-capstone ruby go golang-golang-x-crypto golang-golang-x-image golang-golang-x-net golang-golang-x-sys golang-golang-x-text golang-golang-x-tools sqlite arduino vim-language-server bash-language-server haskell-language-server lua-language-server typescript-language-server yaml-language-server python-lsp-server gopls vscode-html-languageserver shellcheck cppcheck flake8 clazy ctags
+                ;;
+            2)
+                pacman --needed --noconfirm -S dorkscout gobuster gospider gowitness amass subjack assetfinder httprobe gau waybackurls nikto cmsmap droopescan joomscan wpscan gitdump sqlmap beef xsstrike ssrfmap gopherus lfimap dotdotpwn commix xxexploiter formatstringexploiter graphqlmap jwt-tool ffuf ffuf-scripts slither manticore nimbostratus detect-secrets trufflehog gitleaks gitrob gittools padbuster
+                ;;
+            3)
+                pacman --needed --noconfirm -S cewl seclists payloadsallthethings fuzzdb
+                ;;
+            4)
+                pacman --needed --noconfirm -S nmap hydra sn1per autorecon exploitdb smbmap metasploit windows-binaries crackmapexec evil-winrm mimikatz impacket bloodhound empire nishang chisel sshuttle proxychains-ng mitmf mitmproxy openvpn enum4linux snmpenum kerbrute powersploit windows-exploit-suggester juicy-potato pspy one-lin3r smtp-user-enum onesixtyone nbtscan sslscan whatweb dnsrecon autorecon
+                if [ ! -d /usr/share/static-binaries ]; then
+                    git clone https://github.com/andrew-d/static-binaries.git /usr/share/static-binaries
+                fi
+
+                ;;
+            5)
+                pacman --needed --noconfirm -S wireshark-qt wireshark-cli tcpdump bettercap bettercap-caplets aircrack-ng libnl openssl ethtool util-linux zlib libpcap pcre hwloc cmocka net-tools wpa_supplicant tcpdump iw usbutils pciutils reaver mdk4 macchanger hcxtools pixiewps bully btlejack crackle dnsmasq bluediving homepwn pret
+                if [ ! -d /opt/wef ]; then
+                    git clone https://github.com/D3Ext/WEF /home/$SUDO_USER/Downloads/WEF && cd /home/$SUDO_USER/Downloads/WEF && bash setup.sh && rm -rf /home/$SUDO_USER/Downloads/WEF && ln --force -s /opt/wef/wef /usr/bin/wef
+                fi
+                ;;
+            6)
+                pacman --needed --noconfirm -S jd-gui gdb peda ghidra radare2 pwntools ltrace strace aflplusplus afl-utils valgrind lld binwalk firmwalker firmware-mod-kit squashfs-tools checksec sleuthkit cuckoo virustotal stegsolve steghide stegdetect stegoveritas rsactftool foremost pngcheck ffmpeg outguess
+                sudo -u $SUDO_USER echo "source /usr/share/peda/peda.py" >> ~/.gdbinit
+                ;;
+            7)
+                pacman --needed --noconfirm -S android-studio gtk2 ncurses5-compat-libs android-ndk android-sdk android-sdk-platform-tools android-apktool drozer jadx objection frida mobsf frida-ios-dump apkleaks dex2jar smali can-utils cantoolz volatility
+                ;;
+            8)
+                pacman --needed --noconfirm -S john hashcat
+                if [ ! -d /opt/SprayingToolkit ]; then
+                    git clone https://github.com/byt3bl33d3r/SprayingToolkit.git /opt/SprayingToolkit && cd /opt/SprayingToolkit && pip3 install -r requirements.txt
+                fi
+                ;;
+            9)
+                pacman --needed --noconfirm -S gophish autosint gosint theharvester email2phonenumber credsniper set recon-ng ufonet goldeneye
+
+                go get github.com/imthaghost/goclone && cd $GOPATH/src/github.com/imthaghost/goclone/cmd/goclone && go install && go install github.com/imthaghost/goclone/cmd/goclone@latest
+
+                ;;
+            10)
+                pacman --needed --noconfirm -S xclip xterm octopi dolphin neovim okular cherrytree qbittorrent flameshot obs-studio kdeconnect chromium torctl tmux ark linux-lts linux-lts-headers linux-zen-headers screen rlwrap speedcrunch zeal performance-tweaks kdeconnect kdeplasma-addons rdesktop fish fisher ttf-nerd-fonts-symbols-2048-em
+                
+                #Theming
+                if [ ! -d /home/$SUDO_USER/.local/share/color-schemes ]; then
+                  cd /home/$SUDO_USER/Downloads && git clone https://www.github.com/Roboron3042/Cyberpunk-Neon && mkdir -p /home/$SUDO_USER/.local/share/color-schemes && cd Cyberpunk-Neon && cp kde/cyberpunk-neon.colors /home/$SUDO_USER/.local/share/color-schemes/ && cp -r terminal/konsole/ /home/$SUDO_USER/.local/share/ && git clone https://github.com/clayrisser/breeze-hacked-cursor-theme.git && make install
+                fi
+
+                #Neovim and fish QoL
+                if [ ! -d /home/$SUDO_USER/.config/nvim/lua/custom ]; then
+                  #spawn nvim in headless and quit
+                  git clone https://github.com/NvChad/NvChad /home/$SUDO_USER/.config/nvim --depth 1 && sudo -u $SUDO_USER nvim --headless +qall && cd /home/$SUDO_USER/Downloads && git clone https://github.com/Eli2k765/dotfiles.git && cp -Tr dotfiles/config/nvim /home/$SUDO_USER/.config/nvim/
+                fi
+                if [ ! -f /home/$SUDO_USER/.config/fish/functions/bass.fish ]; then
+                  sudo -u $SUDO_USER fish -c 'fisher install edc/bass'
+                fi
+                if [ ! -f /home/$SUDO_USER/.config/fish/functions/nvm.fish ]; then
+                  sudo -u $SUDO_USER fish -c 'fisher install jorgebucaran/nvm.fish'
+                fi
+
+                #KDE QoL
+                if [ ! -f /home/$SUDO_USER/.local/share/kservices5/searchproviders/edb.desktop ]; then
+                  cd /home/$SUDO_USER/Downloads/dotfiles && cp -Tr local/ /home/$SUDO_USER/.local/ && cp -Tr config/ /home/$SUDO_USER/.config/ && cp tmux.conf /home/$SUDO_USER/.tmux.conf && sed -i 's/GRUB_THEME/#GRUB_THEME/g' /etc/default/grub
+                fi
+                ;;
+    esac
+done
+
+#change the owner of all files in /home/$SUDO_USER to $SUDO_USER
+chown -R $SUDO_USER:$SUDO_USER /home/$SUDO_USER
+
+echo "Cleaning oprhaned packages"
+pacman -Rns $(pacman -Qtdq) --noconfirm
+
+echo "Cleaning pacman cache"
+pacman -Sc --noconfirm
+
+#Give the user a chance to read the output
+sleep 10
+
+#Let the user know the script is done
+echo "Done! Rebooting in 5 seconds"
+sleep 5
+
+#Reboot the system
+reboot
+

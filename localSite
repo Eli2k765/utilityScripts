@@ -1,0 +1,12 @@
+#!/bin/bash
+
+
+[[ $(id -u) -eq 0 ]] || { echo >&2 "Must be root to run script"; exit 1; }
+
+sed -i s/##0.0.0.0/0.0.0.0/g /etc/hosts && sed -i 's/https/http/g' $(find  /home/$SUDO_USER/Desktop/Eli2k/eli2k -type f) && cd /home/$SUDO_USER/Desktop/Eli2k/eli2k && python -m http.server 80
+
+trap 'ctrl_c; exit 1' 0 2
+
+function ctrl_c() {
+        sed -i 's/https/http/g' $(find /home/$SUDO_USER/Desktop/Eli2k/eli2k -type f) && sed -i 's/http/https/g' $(find /home/$SUDO_USER/Desktop/Eli2k/eli2k -type f) && sed -i s/0.0.0.0/##0.0.0.0/g /etc/hosts
+}
