@@ -4,23 +4,34 @@
 REPO_URL="https://github.com/Eli2k765/site-eli2k.git"
 DIR_PATH="/home/erodgers/site-eli2k/"
 
-# Change to the directory where the repo is or will be located
-cd $DIR_PATH
+# Check if 'site-eli2k' directory exists
+if [ -d "$DIR_PATH" ]; then
+    # 'site-eli2k' exists, cd into it
+    cd "$DIR_PATH" || exit 1
 
-# Check if the repo already exists
-if [ -d ".git" ]
-then
-    echo "Repository already exists. Pulling the latest changes..."
-    git pull
+    # Check if it's a git repository
+    if [ -d ".git" ]; then
+        echo "Repository already exists. Pulling the latest changes..."
+        git pull || exit 1
+    else
+        # 'site-eli2k' exists but isn't a git repo, replace it
+        echo "'site-eli2k' exists but is not a git repository. Replacing it..."
+        rm -rf "$DIR_PATH" # Remove the existing directory
+        git clone "$REPO_URL" "$DIR_PATH" || exit 1
+        cd "$DIR_PATH" || exit 1
+    fi
 else
+    # 'site-eli2k' doesn't exist, clone it
     echo "Repository not found. Cloning the repository..."
-    git clone $REPO_URL .
+    git clone "$REPO_URL" "$DIR_PATH" || exit 1
+    cd "$DIR_PATH" || exit 1
 fi
 
-cd eli2k/
+# Change to the 'eli2k' subdirectory within the repo
+cd eli2k/ || exit 1
 
 # Sync the files to the directory
-rsync -av --delete . /var/www/root/
+rsync -av --delete . /var/www/root/ || exit 1
 
 # Change the permissions of all files and directories
 find /var/www/root/ -type d -exec chmod 755 {} +
