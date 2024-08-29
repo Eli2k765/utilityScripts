@@ -1,0 +1,29 @@
+#!/bin/bash
+
+# Set the repository URL and the directory path
+REPO_URL="https://github.com/Eli2k765/site-eli2k.git"
+DIR_PATH="/home/erodgers/site-eli2k/"
+
+# Change to the directory where the repo is or will be located
+cd $DIR_PATH
+
+# Check if the repo already exists
+if [ -d ".git" ]
+then
+    echo "Repository already exists. Pulling the latest changes..."
+    git pull
+else
+    echo "Repository not found. Cloning the repository..."
+    git clone $REPO_URL .
+fi
+
+cd eli2k/
+
+# Sync the files to the directory
+rsync -av --delete . /var/www/root/
+
+# Change the permissions of all files and directories
+find /var/www/root/ -type d -exec chmod 755 {} +
+find /var/www/root/ -type f -exec chmod 644 {} +
+
+echo "Operation completed successfully."
